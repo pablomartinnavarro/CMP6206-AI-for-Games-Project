@@ -1,5 +1,5 @@
 # CMP6206: Artificial Intelligence for Games
-## Coursework Project: Tactical Infiltration AI Simulation
+## Coursework Project: 3D Tactical Infiltration & Multi-Agent Stealth Simulation
 
 **Student Name:** Pablo Martín Navarro  
 **Institution:** Birmingham City University (BCU)  
@@ -8,51 +8,60 @@
 
 ---
 
-### 1. Project Concept & Overview
-This project is a 3D tactical infiltration and stealth AI simulation developed in Unity. The player navigates a high-security warehouse/facility while avoiding autonomous guard agents. 
+### 1. Game Concept & Core Reference: "3D Pac-Man Infiltration"
+This project is an adversarial 3D tactical infiltration simulation developed in Unity. The player navigates a warehouse environment, utilizing cover and obstacles to avoid detection by autonomous security agents.
 
-The primary goal is to implement custom-built, modular game AI algorithms from first principles (without relying on Unity's built-in `NavMeshAgent` decision logic), focusing on transparent decision-making, physical and line-of-sight awareness, and graph-based spatial navigation.
+**Core Academic Reference (Pac-Man 3D Mechanics):**  
+Taking inspiration from the foundational multi-agent AI design of *Pac-Man* (Toru Iwatani, 1980), the simulation does not rely on identical enemy units. Instead, it features two distinct ground-based enemy archetypes with asymmetric decision-making, sensing profiles, and target-selection mathematics:
+* **The Patrol Guard (Blinky archetype):** Direct pursuit agent. Tracks the player's exact current grid location using shortest-path traversal.
+* **The Interceptor Guard (Pinky archetype):** Predictive ambush agent. Calculates the player's forward trajectory vector and routes towards future junction nodes to cut off escape routes.
 
 ---
 
 ### 2. Formal PEAS Specification (Russell & Norvig Framework)
-To design the guard agents as rational decision-makers, their task environment is formulated under the **PEAS** framework:
-
 * **Performance Measure (P):**
-  * Detection efficiency: Time taken to spot and react to intruders.
-  * Patrol coverage: Consistency in traversing assigned waypoints without leaving blind spots.
-  * Search effectiveness: Rapid investigation of sound/disturbance sources and strategic clearing of last known positions.
+  * *Detection Latency:* Time taken from line-of-sight acquisition to alert state.
+  * *Search Efficiency:* Speed of clearing last known player coordinates ($LKP$).
+  * *Interception Rate:* Successful ambushes executed by coordinated flanking.
 * **Environment (E):**
-  * 3D warehouse facility with dynamic obstacles (crates, pillars, walls).
-  * Characteristics: *Partially Observable* (guard vision is obstructed by walls), *Dynamic* (player moves in real-time), *Continuous* (3D positions and physics-based vectors), *Multi-agent* (adversarial dynamic between guards and player).
+  * 3D warehouse floor with static and dynamic physical barriers (crates, walls, corridors).
+  * Characteristics: *Partially Observable* (occlusion by geometry), *Dynamic* (player moves in real-time), *Continuous* (physics-based vectors), *Multi-Agent* (adversarial dynamic between player and guards).
 * **Actuators (A):**
-  * Kinematic/Vector-based translation and angular rotation.
-  * State visualizers (dynamic field-of-view color transitions: Green = Patrol, Yellow = Investigate, Red = Alert/Chase).
-  * Audio alerts and alert broadcasts to neighbouring units.
+  * Vector-based translation and rotation (`Transform`, `Time.deltaTime`).
+  * Field-of-View sensory feedback (Visual cone debug lines: Green = Clear, Yellow = Occluded, Red = Alert).
+  * State visualizers and radio broadcast alerts between ground units.
 * **Sensors (S):**
-  * **Line-of-Sight & Vision:** Multi-ray conical bundle (`Physics.Linecast` sweep across horizontal field-of-view).
-  * **Auditory Sensor:** Proximity and volume queries (`Physics.OverlapSphere` / `SphereCast`) to detect player movement disturbances.
-  * **Obstacle Clearance:** Spatial validation queries to detect walkable clearance around corners.
+  * *Conical Ray Bundle:* 11-ray horizontal fan spanning 90° FOV using `Physics.Raycast` for line-of-sight and physical occlusion.
+  * *Acoustic Proximity:* Spherical trigger check (`Physics.OverlapSphere`) detecting rapid player footstep noise.
 
 ---
 
-### 3. Planned AI Architecture
-The agent implementation follows a modular, decoupled architecture structured across core coursework themes:
+### 3. Dual-NPC Ground AI Specification
 
-1. **Spatial Representation & Pathfinding (Weeks 1 & 4):**
-   * Grid-based spatial discretization (`Grid` and `Node` structures) scanning the 3D geometry for walkable/unwalkable cells.
-   * Pathfinding using **Uniform-Cost Search (UCS / Dijkstra)** on weighted terrains (e.g., normal floors vs noisy metallic surfaces/puddles) before progressing to heuristic search (**A***).
-2. **Perception Layer (Week 3):**
-   * Raycast bundles calculating orientation offsets via `Quaternion.AngleAxis` on the local $XZ$ plane.
-   * Geometric visibility checks combining vector dot product ($\vec{u} \cdot \vec{v}$) for FOV filtering and raycasting for occlusion handling.
-3. **Decision-Making Layer (Week 2):**
-   * **State Design Pattern (FSM):** Encapsulated state classes (`PatrolState`, `InvestigateState`, `ChaseState`, `SearchState`) with explicit `Enter()`, `Update()`, and `Exit()` lifecycle actions.
-   * Extension towards a **Stack-Based FSM (Pushdown Automaton)** to enable transient memory (e.g., investigating a noise and returning to the exact interrupted patrol route without state corruption).
+| Feature | Enemy Archetype 1: Patrol Guard (*Blinky*) | Enemy Archetype 2: Interceptor Guard (*Pinky*) |
+| :--- | :--- | :--- |
+| **Primary Role** | Direct patrol & chasing | Flanking & ambush prediction |
+| **Target Computation** | Exact current player node ($\vec{P}_{player}$) | Predicted forward node ($\vec{P}_{future} = \vec{P} + \vec{v} \cdot t$) |
+| **Pathfinding Engine** | Uniform-Cost Search (UCS / Dijkstra) | Uniform-Cost Search (UCS) biased towards intersections |
+| **Decision Architecture** | Classical State Machine (Patrol, Investigate, Chase) | Stack-Based FSM with return memory (Ambush, Search) |
+| **Primary Sensor** | 90° Conical Raycast Bundle (High range) | Narrow FOV + Acoustic proximity radius |
 
 ---
 
-### 4. Milestone 1 Status (21/10/2026)
-* [x] Project repository initialized and public for evaluation.
-* [x] Formal project design document and PEAS framework defined.
-* [x] Initial Unity greybox scene setup with Player and Guard agent anchors.
-* [x] Basic vector-based player movement and multi-ray vision sensor visualization.
+### 4. Implementation Roadmap & Milestones
+
+* **Phase 1 (Weeks 4–5) — Spatial Discretization & Uninformed Pathfinding:**
+  * [x] *Milestone 1:* Project foundation, formal PEAS documentation, greybox prototype, vector movement, and raycast sensor.
+  * [ ] Discretize warehouse ground into a 2D grid graph (`Node.cs`, `Grid.cs`) with physical unwalkable masks.
+  * [ ] Implement custom **Uniform-Cost Search (UCS / Dijkstra)** to navigate weighted terrain without Unity's NavMesh.
+* **Phase 2 (Weeks 6–7) — Finite State Machine (FSM) Decision Engine:**
+  * [ ] Implement State Pattern for Patrol Guard: `PatrolState`, `InvestigateState`, `ChaseState`.
+  * [ ] Integrate hearing triggers and last-known-position memory.
+* **Phase 3 (Weeks 8–9) — Predictive Interceptor AI:**
+  * [ ] Build vector prediction logic calculating the player's future trajectory.
+  * [ ] Implement Stack-Based FSM for ambush behaviors and tactical search routines.
+* **Phase 4 (Weeks 10–11) — Multi-Agent Coordination & Alert Broadcasts:**
+  * [ ] Inter-agent communication system: Guards relay player positions and coordinate flanking routes.
+* **Phase 5 (December / January) — Evaluation, Report & Final Submission:**
+  * [ ] Performance benchmarking and algorithmic complexity evaluation.
+  * [ ] Technical Report (Word/PDF) and 10-minute video walkthrough defense.
