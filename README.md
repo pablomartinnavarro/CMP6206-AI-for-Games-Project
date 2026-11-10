@@ -1,124 +1,70 @@
 # CMP6206 - Artificial Intelligence for Games
+
 ## 3D Warehouse Stealth AI System
 
 **Institution:** Birmingham City University (BCU) / Universidad de Alcalá (UAH)  
 **Module:** CMP6206 - Artificial Intelligence for Games  
-**Engine:** Unity 6 (Built-In 3D Render Pipeline)  
-**Language:** C# (.NET Standard)  
-**Author:** Pablo Martín Navarro  
+**Engine:** Unity 6 (Built-in 3D Render Pipeline)  
+**Language:** C#  
+**Navigation Paradigm:** Custom Grid-Based Spatial Graph + Octile A* Pathfinding (Zero Unity NavMesh black-box dependency)
 
 ---
 
-## 1. Project Overview
+## 1. Project Overview & Core Mechanics
 
-This project implements an autonomous artificial intelligence system for a 3D stealth game set in an industrial warehouse environment (inspired by the classic 3D Pac-Man stealth paradigm). 
+This project is a 3D tactical stealth and evasion prototype set in an industrial warehouse environment ($30 \times 30\text{ m}$). The player controls an infiltrator in first-person perspective, requiring situational awareness, posture management, and path prediction to complete mission objectives while evading autonomous security entities.
 
-The core academic objective of this project is the design, implementation, and empirical comparison of classical and hierarchical game AI architectures **without relying on engine black boxes**. All pathfinding algorithms, sensory perception layers, state machines, and decision trees are engineered from first principles in C#.
-
----
-
-## 2. Architectural Design & Pedagogical Constraints
-
-### Strict "No Black-Box" Policy
-In commercial engines like Unity, navigation is frequently resolved via native modules such as `NavMeshSurface` and `NavMeshAgent`. However, in alignment with the academic rubric for CMP6206:
-* **Unity NavMesh has been completely excluded.** Relying on native path baking obscures algorithmic evaluation and limits custom heuristic optimizations.
-* **In-House Spatial Graph & $A^*$ Algorithm:** All navigation is handled by a custom 2D/3D discretized grid system (`GridSystem.cs`) and an optimized implementation of the $A^*$ search algorithm (`Pathfinding.cs`).
+### Game Loop & Objectives
+* **Objective / Win Condition:** Locate and retrieve **4 Security Keycards** scattered throughout the warehouse layout behind physical barriers and reach the designated **Extraction Zone** to escape.
+* **Loss Condition (Game Over):** Getting within lethal interception range ($d < 1.2\text{ m}$) of any patrolling guard or tactical hunter triggers an immediate detection sequence, freezing player controls and prompting a scenario restart.
 
 ---
 
-## 3. Implemented Systems (Phases Completed)
+## 2. AI Architecture Comparison
 
-### Phase 1: Environment & Player Stealth System
-* **Warehouse Environment:** Enclosed $30\text{ m} \times 30\text{ m}$ modular warehouse layout with exterior perimeter barriers and strategic interior obstacles (crates and cover walls) tagged under a dedicated physics layer (`Obstacle`).
-* **First-Person Controller (`PlayerController.cs`):**
-  * Kinematic motion managed via `CharacterController`.
-  * Decoupled mouse-look system avoiding gimbal lock (pitch clamped between $-80^\circ$ and $+80^\circ$).
-  * Dynamic crouch system that adjusts collider height and center offset to maintain strict floor anchoring ($y = 0$).
-* **Acoustic Noise Emission System:**
-  * The player dynamically broadcasts an acoustic radius:
-    * Stationary: $0.0\text{ m}$
-    * Crouched movement: $1.5\text{ m}$
-    * Standing sprint/walk: $8.0\text{ m}$
-  * Visualized in real time in the Unity Scene view using `Gizmos.DrawWireSphere`.
+To evaluate divergent decision-making paradigms in academic game AI, the warehouse is secured by two distinct architectural models sharing the same mathematical navigation core:
 
-### Phase 2: Spatial Discretization & Custom $A^*$ Pathfinding
-* **Lightweight Node Model (`PathNode.cs`):**
-  * Independent pure C# data class to eliminate Garbage Collection overhead.
-  * Tracks grid coordinates $(x, y)$, 3D world position, walkability flags, and parent node references for path reconstruction.
-  * Computes the evaluation function $f(n) = g(n) + h(n)$.
-* **Matrix Grid Scan (`GridSystem.cs`):**
-  * Automatically calculates grid resolution based on warehouse bounds ($30 \times 30$ cells at node radius $r = 0.5\text{ m}$).
-  * Samples static geometry using `Physics.CheckSphere` against the `Obstacle` layer mask.
-  * Provides $O(1)$ coordinate conversions from continuous 3D world space to discrete grid array indices.
-  * Implements 8-neighbour connectivity (orthogonal and diagonal adjacent nodes).
-* **Algorithmic Pathfinding (`Pathfinding.cs`):**
-  * Classic $A^*$ implementation utilizing Open and Closed sets.
-  * **Octile / Diagonal Distance Heuristic:**
-    $$\text{cost}(A, B) = 14 \cdot \min(\Delta x, \Delta y) + 10 \cdot |\Delta x - \Delta y|$$
-    Where $10$ represents orthogonal movement and $14 \approx 10\sqrt{2}$ models diagonal movement without floating-point inaccuracies.
-  * Retraces paths by walking back through parent pointers and outputs a sanitized `List<Vector3>` of waypoints.
+| Feature | Enemy Type A: Finite State Machine (FSM) | Enemy Type B: Behaviour Tree (BT) |
+| :--- | :--- | :--- |
+| **Paradigm** | Deterministic Finite State Machine (`switch-case`) | Hierarchical Composite Tree (`Tick()` / Task return states) |
+| **Behavioral Role** | Routine Perimeter Patrol Guard | Tactical Central Hunter / Stalker |
+| **State Flexibility** | Rigid single-state execution (`Patrol`, `Investigate`, `Chase`) | Priority-driven fallback (`Selector`, `Sequence`, `Decorator`) |
+| **Sensory System** | Angular cone ($90^\circ$, $12\text{ m}$) with real-time Raycast FOV fan | Predictive ray-slicing + persistent search memory |
+| **Pathfinding** | Real-time waypoint requests to custom $A^*$ engine | Reactive re-pathing and waypoint clearing |
 
 ---
 
-## 4. Planned Architecture & Development Roadmap
+## 3. Sensory Perception & Stealth Mechanics
 
-```
-CMP6206-AI-Stealth-Project/
-│
-├── [Phase 1: Foundation] ─────── Warehouse & First-Person Stealth (DONE)
-├── [Phase 2: Navigation] ─────── Discrete Grid & Custom A* Engine (DONE)
-├── [Phase 3: Enemy Type A] ──── Finite State Machine (FSM) - Patrol / Alert / Chase (NEXT)
-├── [Phase 4: Enemy Type B] ──── Behavior Tree (BT) - Dynamic Sensory Priority & Memory
-├── [Phase 5: Perception] ────── Vision Cones (Raycasts) & Acoustic Sensing
-└── [Phase 6: Benchmarking] ──── AI Comparison Metrics & Profiling Report
-```
-
-### Next Milestones:
-1. **Enemy Type A - Finite State Machine (FSM):**
-   * States: `Patrol`, `InvestigateNoise` (Alert), `ChasePlayer`.
-   * Transitions governed by line-of-sight checks and sound wave intersection.
-   * Path execution following waypoints generated by `Pathfinding.cs`.
-2. **Enemy Type B - Behavior Tree (BT):**
-   * Implementation of modular composites (`Selector`, `Sequence`), decorators, and action nodes.
-   * Blackboard data storage for tracking the player's last known position.
-3. **Comparative Evaluation:**
-   * Evaluating execution time, memory allocation, and behavioral adaptability between FSM and BT architectures under varying stealth conditions.
+* **Visual Cone & Occlusion:** Vision is evaluated mathematically using vector angles ($\theta \le 45^\circ$) and distance thresholds ($r \le 12\text{ m}$), verified against an occlusion layer mask (`Obstacle`). A multi-ray Gizmo fan displays real-time collision cuts against geometry in green/yellow, turning red upon target acquisition.
+* **Acoustic Signature (Noise System):** The player's footsteps emit a dynamic noise radius evaluated against the AI's hearing threshold:
+  * Stationary: $0.0\text{ m}$
+  * Crouching: $1.5\text{ m}$
+  * Sprinting/Walking: $8.0\text{ m}$
 
 ---
 
-## 5. Repository Structure
+## 4. Implementation Roadmap & Session Breakdown
 
-```text
-Assets/
-├── Materials/               # Scene and entity visual materials
-├── Prefabs/                 # Reusable entity prefabs (Player, Enemies, Waypoints)
-├── Scenes/
-│   └── SampleScene.unity    # Main testing warehouse arena
-└── Scripts/
-    ├── Pathfinding/         # Custom navigation system
-    │   ├── PathNode.cs      # Core graph node model
-    │   ├── GridSystem.cs    # Spatial discretization and neighbor queries
-    │   └── Pathfinding.cs   # Custom A* search implementation
-    ├── Player/
-    │   └── PlayerController.cs # First-person movement and noise generation
-    ├── Enemy_FSM/           # Finite State Machine implementation (upcoming)
-    ├── Enemy_BT/            # Behavior Tree nodes and blackboard (upcoming)
-    └── Managers/            # Game state and scenario coordinators
-```
-
----
-
-## 6. How to Run
-
-1. Clone this repository:
-   ```bash
-   git clone https://github.com/pablomartinnavarromufuykc5/CMP6206-AI-Stealth-Project.git
-   ```
-2. Open **Unity Hub** and select **Add project from disk**.
-3. Point to the `CMP6206_StealthAI` inner directory using Unity version **6000.0.3f1** (Silicon / Metal).
-4. Open `Assets/Scenes/SampleScene.unity`.
-5. Enter **Play Mode**:
-   * Movement: `W`, `A`, `S`, `D`
-   * Look: Mouse
-   * Crouch (reduces noise radius): `Left Ctrl`
-   * Observe custom $A^*$ grid and collision bounds rendered via editor Gizmos in the Scene view.
+- [x] **Milestone 1: Core Greybox & Spatial Discretization**
+  - [x] $30 \times 30\text{ m}$ warehouse layout with perimeter walls and occlusion crates (`Obstacle` layer).
+  - [x] First-person stealth controller with calibrated crouch collider offsets and dynamic noise emission.
+  - [x] Custom grid matrix generation (`GridSystem.cs`, $900$ discrete nodes, $O(1)$ coordinate mapping).
+  - [x] Custom $A^*$ algorithm (`Pathfinding.cs`) using Octile heuristic ($10/14$) and backtracking reconstruction.
+- [x] **Milestone 2: Enemy Type A - Finite State Machine (FSM)**
+  - [x] Cyclic waypoint patrol circuit (`WP_1`, `WP_2`, `WP_3`) with arrival tolerances.
+  - [x] Dynamic vision cone with visual raycast fan cutting against geometry.
+  - [x] Acoustic detection triggering investigation state with local scanning rotation.
+  - [x] Continuous path pursuit through custom $A^*$ traversal.
+- [ ] **Milestone 3: Enemy Type B - Modular Behaviour Tree (BT)**
+  - [ ] Abstract node hierarchy (`Node`, `Selector`, `Sequence`, `ActionNode`).
+  - [ ] Hunter tree implementation (`CheckPlayerInFOV`, `TaskChase`, `TaskSearchLastKnown`, `TaskPatrol`).
+  - [ ] Stalker archetype with search memory before returning to base route.
+- [ ] **Milestone 4: Gameplay Loop, Keycards & UI**
+  - [ ] Keycard pickup prefabs with rotation and trigger detection.
+  - [ ] Lethal capture collider check with game-over reset sequence.
+  - [ ] HUD Canvas (Keycard counter, objective tracker, detection status).
+- [ ] **Milestone 5: Level Population, Optimization & Final Video Demonstration**
+  - [ ] Multi-agent layout (2 FSM perimeter guards + 1 BT central hunter).
+  - [ ] Material passes and aesthetic pass.
+  - [ ] Dual-viewport recording (*Game* + *Scene* with Gizmos active) for academic viva/submission.
