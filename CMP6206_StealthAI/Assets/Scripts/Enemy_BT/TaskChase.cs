@@ -11,7 +11,7 @@ public class TaskChase : BTNode
     private List<Vector3> currentPath;
     private int pathIndex = 0;
     private float repathTimer = 0.0f;
-    private const float RepathInterval = 0.3f;
+    private const float RepathInterval = 0.25f;
 
     public TaskChase(Transform enemyTransform, Pathfinding pathfinding, float chaseSpeed, float rotationSpeed)
     {
@@ -25,7 +25,6 @@ public class TaskChase : BTNode
     {
         object targetObj = GetData("target");
 
-        // Si no hay objetivo activo en la memoria, la tarea no puede continuar
         if (targetObj == null)
         {
             currentPath = null;
@@ -34,17 +33,45 @@ public class TaskChase : BTNode
         }
 
         Transform targetTransform = (Transform)targetObj;
+        float flatDistance = Vector2.Distance(
+            new Vector2(enemyTransform.position.x, enemyTransform.position.z),
+            new Vector2(targetTransform.position.x, targetTransform.position.z)
+        );
 
-        // Recalcular ruta periódicamente para adaptarse al movimiento en tiempo real del jugador
+        // Si está a quemarropa (< 1.2 m), empujar directamente contra el jugador sin esperar a A*
+        if (flatDistance <= 1.2f)
+        {
+            Vector3 directDir = (targetTransform.position - enemyTransform.position).normalized;
+            directDir.y = 0;
+            enemyTransform.position = Vector3.MoveTowards(enemyTransform.position, targetTransform.position, chaseSpeed * Time.deltaTime);
+
+            if (directDir != Vector3.zero)
+            {
+                Quaternion targetRot = Quaternion.LookRotation(directDir);
+                enemyTransform.rotation = Quaternion.Slerp(enemyTransform.rotation, targetRot, rotationSpeed * Time.deltaTime);
+            }
+
+            state = NodeState.RUNNING;
+            return state;
+        }
+
+        // Recalcular ruta periódicamente
         repathTimer += Time.deltaTime;
         if (repathTimer >= RepathInterval || currentPath == null)
         {
             repathTimer = 0f;
             currentPath = pathfinding.FindPath(enemyTransform.position, targetTransform.position);
             pathIndex = 0;
+
+            // Si están en la misma celda de la cuadrícula, asignar la posición continua directamente
+            if (currentPath == null || currentPath.Count == 0)
+            {
+                currentPath = new List<Vector3> { targetTransform.position };
+                pathIndex = 0;
+            }
         }
 
-        // Desplazamiento a través de los nodos calculados por A*
+        // Seguir los waypoints calculados por A*
         if (currentPath != null && pathIndex < currentPath.Count)
         {
             Vector3 targetPoint = currentPath[pathIndex];
@@ -69,7 +96,7 @@ public class TaskChase : BTNode
             return state;
         }
 
-        state = NodeState.SUCCESS;
+        state = NodeState.RUNNING;
         return state;
     }
 }
